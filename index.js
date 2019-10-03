@@ -301,6 +301,7 @@ const response_data_crawled = async (res, date, format) => {
     case 'json': {
       res.writeHead(200, {'Content-Type': 'application/json'});
       res.write(JSON.stringify(rows));
+      res.end();
       break
     }
     default:
