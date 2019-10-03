@@ -245,12 +245,20 @@ const get_invoices_from_asptext = (asp_text) => {
     pos = js_text.indexOf('[ENTER]Placa: ')
     _js_text = js_text.substring(pos+14)
     pos = _js_text.indexOf('[ENTER]')
-    const PLACA = _js_text.substring(0,pos)
+    let PLACA = _js_text.substring(0,pos)
+
+    PLACA = PLACA.toUpperCase()
+    PLACA = PLACA.replace(/[^a-z0-9]/gi,'');
+
+    const [SERIE, NUM_DOC] = FACTURA.split('-')
 
     registers.push({
       FACTURA,
+      SERIE,
+      NUM_DOC,
       FECHA,
       RUC,
+      RUC_PROVEEDOR: '20517252558',
       OP_GRAVADA,
       OP_INAFECTA,
       OP_EXONERADA,
@@ -271,21 +279,33 @@ const crawl_invoices = async (date) => {
   return get_invoices_from_asptext(html_text)
 }
 
-const response_data_crawled = async (res, date) => {
+const response_data_crawled = async (res, date, format) => {
   const rows = await crawl_invoices(date)
   //var xls = json2xls(rows);
   //fs.writeFileSync('data.xlsx', xls, 'binary');
 
   //var readStream = fs.createWriteStream(xls);
   //readStream.pipe(res);
-  
+
   //res.writeHead(200, {'Content-Type': 'application/json'});
   //res.write(JSON.stringify(rows));
-  var conf = json2xls.prepareJson(rows)
-  var result = nodeExcel.execute(conf);
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats');
-  res.setHeader("Content-Disposition", "attachment; filename=" + `Facturas-${date}.xlsx`);
-  res.end(result, 'binary');
+  switch (format) {
+    case 'excel': {
+      var conf = json2xls.prepareJson(rows)
+      var result = nodeExcel.execute(conf);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats');
+      res.setHeader("Content-Disposition", "attachment; filename=" + `Facturas-${date}.xlsx`);
+      res.end(result, 'binary');
+      break;
+    }
+    case 'json': {
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.write(JSON.stringify(rows));
+      break
+    }
+    default:
+      break;
+  }
 }
 
 const parseParams = (tcParams) => {
@@ -306,6 +326,7 @@ http.createServer(function(req, res) {
   
   const tdDate = new Date()
   let lcDate = ("0" + tdDate.getDate()).slice(-2) + "/" + ("0"+(tdDate.getMonth()+1)).slice(-2) + "/" + tdDate.getFullYear()
+  let format = 'excel'
   if (params) {
     const loParams = parseParams( params );
     if(loParams['fecha']) {
@@ -313,11 +334,14 @@ http.createServer(function(req, res) {
       if(arr.length == 3 && arr[0] && arr[0].length==2 && arr[1] && arr[1].length==2 && arr[2] && arr[2].length==4 )
         lcDate = loParams['fecha']
     }
+    if(loParams['format']) {
+      format = loParams['format']
+    }
   }
 
   if( url == '/' ) {
     console.log(`new request of date ${lcDate}`)
-    response_data_crawled(res, lcDate)
+    response_data_crawled(res, lcDate, format)
   } else {
     res.writeHead(404,{'Content-Type':'text/html'});
     res.end('404 error');
